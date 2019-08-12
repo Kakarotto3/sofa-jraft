@@ -156,8 +156,10 @@ public class NodeImpl implements Node, RaftServerService {
     protected final Lock                   readLock              = this.readWriteLock.readLock();
     private volatile State                 state;
     private volatile CountDownLatch        shutdownLatch;
+    // 服务器最后知道的任期号(从0开始递增)
     private long                           currTerm;
     private volatile long                  lastLeaderTimestamp;
+    // 当前Leader
     private PeerId                         leaderId              = new PeerId();
     private PeerId                         votedId;
     private final Ballot                   voteCtx               = new Ballot();
@@ -178,6 +180,7 @@ public class NodeImpl implements Node, RaftServerService {
     private LogManager                     logManager;
     private FSMCaller                      fsmCaller;
     private BallotBox                      ballotBox;
+    // 是否为空：是否设置快照URI
     private SnapshotExecutor               snapshotExecutor;
     private ReplicatorGroup                replicatorGroup;
     private final List<Closure>            shutdownContinuations = new ArrayList<>();
@@ -930,6 +933,9 @@ public class NodeImpl implements Node, RaftServerService {
         }
     }
 
+    /**
+     * 更新Leader
+     */
     private void resetLeaderId(final PeerId newLeaderId, final Status status) {
         if (newLeaderId.isEmpty()) {
             if (!this.leaderId.isEmpty() && this.state.compareTo(State.STATE_TRANSFERRING) > 0) {
