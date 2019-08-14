@@ -88,6 +88,7 @@ public class LogManagerImpl implements LogManager {
     private volatile boolean                                 stopped;
     private volatile boolean                                 hasError;
     private long                                             nextWaitId;
+    // 已持久化的LogEntry的最大LogId
     private LogId                                            diskId                 = new LogId(0, 0);
     private LogId                                            appliedId              = new LogId(0, 0);
     // TODO  use a lock-free concurrent list instead?
@@ -412,6 +413,9 @@ public class LogManagerImpl implements LogManager {
         return true;
     }
 
+    /**
+     * 持久化LogEntry，并返回最后持久化到磁盘LogEntry对应的LogId
+     */
     private LogId appendToStorage(final List<LogEntry> toAppend) {
         LogId lastId = null;
         if (!this.hasError) {
@@ -443,11 +447,17 @@ public class LogManagerImpl implements LogManager {
     }
 
     private class AppendBatcher {
+        // 初始为空
         List<StableClosure> storage;
+        // 初始256，storage到达cap是flush
         int                 cap;
+        // storage.size
         int                 size;
+        // LogEntry中数据负载到达bufferSizeflush
         int                 bufferSize;
+        // 缓存LogEntry
         List<LogEntry>      toAppend;
+        // LogManagerImpl.this.diskId
         LogId               lastId;
 
         public AppendBatcher(final List<StableClosure> storage, final int cap, final List<LogEntry> toAppend,
@@ -491,12 +501,18 @@ public class LogManagerImpl implements LogManager {
         }
     }
 
+    /**
+     * StableClosureEvent消费者
+     */
     private class StableClosureEventHandler implements EventHandler<StableClosureEvent> {
         LogId               lastId  = LogManagerImpl.this.diskId;
         List<StableClosure> storage = new ArrayList<>(256);
         AppendBatcher       ab      = new AppendBatcher(this.storage, 256, new ArrayList<>(),
                                         LogManagerImpl.this.diskId);
 
+        /**
+         * 无日志条目时触发LogEntry的持久化
+         */
         @Override
         public void onEvent(final StableClosureEvent event, final long sequence, final boolean endOfBatch)
                                                                                                           throws Exception {

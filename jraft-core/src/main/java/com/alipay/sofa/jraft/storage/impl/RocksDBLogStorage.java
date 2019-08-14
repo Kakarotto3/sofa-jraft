@@ -428,6 +428,11 @@ public class RocksDBLogStorage implements LogStorage {
         }
     }
 
+    /**
+     * 批量持久化LogEntry，以LogId.index为key
+     * @param entries
+     * @return
+     */
     @Override
     public int appendEntries(final List<LogEntry> entries) {
         if (entries == null || entries.isEmpty()) {
