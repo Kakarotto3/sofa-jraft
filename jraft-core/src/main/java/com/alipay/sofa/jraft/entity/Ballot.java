@@ -37,7 +37,9 @@ public class Ballot {
 
     public static class UnfoundPeerId {
         PeerId  peerId;
+        // 初始false
         boolean found;
+        // 0开始
         int     index;
 
         public UnfoundPeerId(PeerId peerId, int index, boolean found) {

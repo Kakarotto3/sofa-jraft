@@ -104,6 +104,7 @@ public enum RaftError {
      * <p>
      * <code>EHIGHERTERMRESPONSE = 10008;</code>
      */
+    // 对端节点有更高的Term，PreVote可能收到
     EHIGHERTERMRESPONSE(10008),
 
     /**

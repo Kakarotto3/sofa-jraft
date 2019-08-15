@@ -856,6 +856,7 @@ public class NodeImpl implements Node, RaftServerService {
         // Now the raft node is started , have to acquire the writeLock to avoid race
         // conditions
         this.writeLock.lock();
+        // 只有自己，否则需要preVote
         if (this.conf.isStable() && this.conf.getConf().size() == 1 && this.conf.getConf().contains(this.serverId)) {
             // The group contains only this server which must be the LEADER, trigger
             // the timer immediately.
@@ -1363,6 +1364,10 @@ public class NodeImpl implements Node, RaftServerService {
         }
     }
 
+    /**
+     * @see com.alipay.sofa.jraft.rpc.impl.core.RequestVoteRequestProcessor
+     * 收到PreVote时回调
+     */
     @Override
     public Message handlePreVoteRequest(final RequestVoteRequest request) {
         boolean doUnlock = true;
@@ -1383,18 +1388,21 @@ public class NodeImpl implements Node, RaftServerService {
             boolean granted = false;
             // noinspection ConstantConditions
             do {
+                // 当前存在Leader且Leader租期未到
                 if (this.leaderId != null && !this.leaderId.isEmpty() && isCurrentLeaderValid()) {
                     LOG.info(
                         "Node {} ignore PreVoteRequest from {}, term={}, currTerm={}, because the leader {}'s lease is still valid.",
                         getNodeId(), request.getServerId(), request.getTerm(), this.currTerm, this.leaderId);
                     break;
                 }
+                // 请求的Term小于当前Term
                 if (request.getTerm() < this.currTerm) {
                     LOG.info("Node {} ignore PreVoteRequest from {}, term={}, currTerm={}.", getNodeId(),
                         request.getServerId(), request.getTerm(), this.currTerm);
                     // A follower replicator may not be started when this node become leader, so we must check it.
                     checkReplicator(candidateId);
                     break;
+                // 请求的Term比当前Term大一任
                 } else if (request.getTerm() == this.currTerm + 1) {
                     // A follower replicator may not be started when this node become leader, so we must check it.
                     // check replicator state
@@ -2223,10 +2231,15 @@ public class NodeImpl implements Node, RaftServerService {
         }
     }
 
+    /**
+     * @see  com.alipay.sofa.jraft.rpc.impl.core.RequestVoteRequestProcessor
+     */
     private class OnPreVoteRpcDone extends RpcResponseClosureAdapter<RequestVoteResponse> {
 
         final long         startMs;
+        // PreVote对端节点PeerId
         final PeerId       peer;
+        // PreVote前的term
         final long         term;
         RequestVoteRequest request;
 
@@ -2287,6 +2300,7 @@ public class NodeImpl implements Node, RaftServerService {
                     LOG.warn("Node {} channel init failed, address={}.", getNodeId(), peer.getEndpoint());
                     continue;
                 }
+                // preVote前记录term，preVote后将进行校验
                 final OnPreVoteRpcDone done = new OnPreVoteRpcDone(peer, this.currTerm);
                 done.request = RequestVoteRequest.newBuilder() //
                     .setPreVote(true) // it's a pre-vote request.
