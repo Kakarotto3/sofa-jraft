@@ -688,6 +688,12 @@ public class Replicator implements ThreadId.OnError {
         return true;
     }
 
+    /**
+     * 初始化 Replicator、ThreadId 开启定时任务
+     * @param opts
+     * @param raftOptions
+     * @return
+     */
     public static ThreadId start(final ReplicatorOptions opts, final RaftOptions raftOptions) {
         if (opts.getLogManager() == null || opts.getBallotBox() == null || opts.getNode() == null) {
             throw new IllegalArgumentException("Invalid ReplicatorOptions.");
@@ -1283,6 +1289,7 @@ public class Replicator implements ThreadId.OnError {
     private boolean fillCommonFields(final AppendEntriesRequest.Builder rb, long prevLogIndex, final boolean isHeartbeat) {
         final long prevLogTerm = this.options.getLogManager().getTerm(prevLogIndex);
         if (prevLogTerm == 0 && prevLogIndex != 0) {
+            // 非心跳消息，AppendEntries中取不到Term，返回false安装快照
             if (!isHeartbeat) {
                 Requires.requireTrue(prevLogIndex < this.options.getLogManager().getFirstLogIndex());
                 LOG.debug("logIndex={} was compacted", prevLogIndex);

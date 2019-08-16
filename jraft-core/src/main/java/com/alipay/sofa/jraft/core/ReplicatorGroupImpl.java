@@ -53,6 +53,7 @@ public class ReplicatorGroupImpl implements ReplicatorGroup {
     private static final Logger                   LOG                = LoggerFactory
                                                                          .getLogger(ReplicatorGroupImpl.class);
 
+    // 从节点 PeerId -> Replicator
     // <peerId, replicatorId>
     private final ConcurrentMap<PeerId, ThreadId> replicatorMap      = new ConcurrentHashMap<>();
     /** common replicator options */
@@ -154,6 +155,11 @@ public class ReplicatorGroupImpl implements ReplicatorGroup {
         return true;
     }
 
+    /**
+     *
+     * @param peer     目标从节点
+     * @param lockNode 是否加锁
+     */
     @Override
     public void checkReplicator(final PeerId peer, final boolean lockNode) {
         final ThreadId rid = this.replicatorMap.get(peer);

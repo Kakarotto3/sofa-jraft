@@ -740,6 +740,11 @@ public class LogManagerImpl implements LogManager {
         return entry;
     }
 
+    /**
+     * 从lastSnapshotId查询
+     * 从logsInMemory内存查询
+     * 从磁盘查询
+     */
     @Override
     public long getTerm(final long index) {
         if (index == 0) {
@@ -765,6 +770,9 @@ public class LogManagerImpl implements LogManager {
         return getTermFromLogStorage(index);
     }
 
+    /**
+     * 从磁盘载入
+     */
     private long getTermFromLogStorage(final long index) {
         LogEntry entry = this.logStorage.getEntry(index);
         if (entry != null) {
@@ -862,6 +870,7 @@ public class LogManagerImpl implements LogManager {
             this.readLock.unlock();
         }
         try {
+            // 阻塞到回调完成
             c.await();
         } catch (final InterruptedException e) {
             Thread.currentThread().interrupt();

@@ -1367,6 +1367,9 @@ public class NodeImpl implements Node, RaftServerService {
     /**
      * @see com.alipay.sofa.jraft.rpc.impl.core.RequestVoteRequestProcessor
      * 收到PreVote时回调
+     *  当前存在Leader且Leader租期未到，granted为false
+     *  请求的Term小于当前Term，granted为false
+     *  LastLogId没有比自己大，granted为false
      */
     @Override
     public Message handlePreVoteRequest(final RequestVoteRequest request) {

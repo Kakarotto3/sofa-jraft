@@ -90,6 +90,9 @@ public class LogId implements Comparable<LogId>, Copiable<LogId>, Serializable, 
         return true;
     }
 
+    /**
+     * 先比较Term，后比较index
+     */
     @Override
     public int compareTo(final LogId o) {
         // Compare term at first
