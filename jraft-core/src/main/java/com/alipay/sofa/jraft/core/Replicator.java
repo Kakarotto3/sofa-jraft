@@ -78,6 +78,7 @@ public class Replicator implements ThreadId.OnError {
 
     private final RaftClientService          rpcService;
     // Next sending log index
+    // 对于每一个follower, 记录需要发给他的下一条日志条目的索引
     private volatile long                    nextIndex;
     private int                              consecutiveErrorTimes  = 0;
     private boolean                          hasSucceeded;
@@ -434,6 +435,9 @@ public class Replicator implements ThreadId.OnError {
         return this.inflights.poll();
     }
 
+    /**
+     * 心跳响应时反复回调
+     */
     private void startHeartbeatTimer(final long startMs) {
         final long dueTime = startMs + this.options.getDynamicHeartBeatTimeoutMs();
         try {

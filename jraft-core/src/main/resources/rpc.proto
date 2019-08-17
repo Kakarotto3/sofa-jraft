@@ -62,22 +62,23 @@ message AppendEntriesRequestHeader {
   required string peer_id = 3;
 };
 
-message AppendEntriesRequest {              // 心跳&消息
-  required string group_id = 1;
-  required string server_id = 2;
-  required string peer_id = 3;
-  required int64 term = 4;
-  required int64 prev_log_term = 5;
-  required int64 prev_log_index = 6;
+// 心跳 & 探针请求 & 消息
+message AppendEntriesRequest {
+  required string group_id = 1;             // 组
+  required string server_id = 2;            // Leader 服务
+  required string peer_id = 3;              // Follower 服务
+  required int64 term = 4;                  // Leader 当前任期
+  required int64 prev_log_term = 5;         // Leader 前一条log任期
+  required int64 prev_log_index = 6;        // Leader 前一条log序号
   repeated EntryMeta entries = 7;
-  required int64 committed_index = 8;       //  已知被提交的最大日志条目索引
-  optional bytes data = 9;
+  required int64 committed_index = 8;       // Leader已知被提交的最大日志条目索引
+  optional bytes data = 9;                  // LogEntry entry data
 };
 
 message AppendEntriesResponse {
-  required int64 term = 1;
-  required bool success = 2;
-  optional int64 last_log_index = 3;
+  required int64 term = 1;                  // Follower当前任期
+  required bool success = 2;                // 是否成功
+  optional int64 last_log_index = 3;        // Follower最新索引
 };
 
 message GetFileRequest {

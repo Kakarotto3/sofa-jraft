@@ -51,6 +51,7 @@ public abstract class NodeRequestProcessor<T extends Message> extends RpcRequest
     @Override
     public Message processRequest(T request, RpcRequestClosure done) {
         PeerId peer = new PeerId();
+        // 客户端的对端，则指本端
         String peerIdStr = getPeerId(request);
         if (peer.parse(peerIdStr)) {
             Node node = NodeManager.getInstance().get(getGroupId(request), peer);

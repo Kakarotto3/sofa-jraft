@@ -29,7 +29,7 @@ import com.alipay.sofa.jraft.entity.PeerId;
 import com.alipay.sofa.jraft.util.Copiable;
 
 /**
- * A configuration with a set of peers.
+ * A configuration with a set of peers. 集群节点列表
  * @author boyan (boyan@alibaba-inc.com)
  *
  * 2018-Mar-15 11:00:26 AM

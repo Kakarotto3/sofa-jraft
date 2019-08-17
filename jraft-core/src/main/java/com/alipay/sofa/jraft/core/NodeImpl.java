@@ -154,10 +154,12 @@ public class NodeImpl implements Node, RaftServerService {
     private final ReadWriteLock            readWriteLock         = new ReentrantReadWriteLock();
     protected final Lock                   writeLock             = this.readWriteLock.writeLock();
     protected final Lock                   readLock              = this.readWriteLock.readLock();
+    // Leader、Candidate、Follower ...
     private volatile State                 state;
     private volatile CountDownLatch        shutdownLatch;
     // 服务器最后知道的任期号(从0开始递增)
     private long                           currTerm;
+    // 最后收到Leader AppendEntries 的时间
     private volatile long                  lastLeaderTimestamp;
     // 当前Leader
     private PeerId                         leaderId              = new PeerId();
@@ -174,6 +176,7 @@ public class NodeImpl implements Node, RaftServerService {
     /** Other services */
     private final ConfigurationCtx         confCtx;
     private LogStorage                     logStorage;
+    // curr_Term和curr_Term投票给谁
     private RaftMetaStorage                metaStorage;
     private ClosureQueue                   closureQueue;
     private ConfigurationManager           configManager;
@@ -189,6 +192,12 @@ public class NodeImpl implements Node, RaftServerService {
     /** Timers */
     private TimerManager                   timerManager;
     private RepeatedTimer                  electionTimer;
+    /**
+     * 请求投票Timer
+     *  - 超时后循环
+     *  - electSelf 时开启;
+     *  - Candidate发生状态转化时，在stepDown时关闭
+     */
     private RepeatedTimer                  voteTimer;
     private RepeatedTimer                  stepDownTimer;
     private RepeatedTimer                  snapshotTimer;
@@ -935,7 +944,7 @@ public class NodeImpl implements Node, RaftServerService {
     }
 
     /**
-     * 更新Leader
+     * 更新Leader并进行状态通知
      */
     private void resetLeaderId(final PeerId newLeaderId, final Status status) {
         if (newLeaderId.isEmpty()) {
@@ -954,12 +963,15 @@ public class NodeImpl implements Node, RaftServerService {
     // in writeLock
     private void checkStepDown(final long requestTerm, final PeerId serverId) {
         final Status status = new Status();
+        // 收到任期比自己大的
         if (requestTerm > this.currTerm) {
             status.setError(RaftError.ENEWLEADER, "Raft node receives message from new leader with higher term.");
             stepDown(requestTerm, false, status);
+        // 任期一致且当前为Candidate
         } else if (this.state != State.STATE_FOLLOWER) {
             status.setError(RaftError.ENEWLEADER, "Candidate receives message from new leader with the same term.");
             stepDown(requestTerm, false, status);
+        // 任期一致且当前无Leader
         } else if (this.leaderId.isEmpty()) {
             status.setError(RaftError.ENEWLEADER, "Follower receives message from new leader with the same term.");
             stepDown(requestTerm, false, status);
@@ -999,6 +1011,9 @@ public class NodeImpl implements Node, RaftServerService {
         this.stepDownTimer.start();
     }
 
+    /**
+     *  ?
+     */
     // should be in writeLock
     private void stepDown(final long term, final boolean wakeupCandidate, final Status status) {
         LOG.debug("Node {} stepDown, term={}, newTerm={}, wakeupCandidate={}.", getNodeId(), this.currTerm, term,
@@ -1008,6 +1023,7 @@ public class NodeImpl implements Node, RaftServerService {
         }
         if (this.state == State.STATE_CANDIDATE) {
             stopVoteTimer();
+        // Leader 或 正在成为Leader
         } else if (this.state.compareTo(State.STATE_TRANSFERRING) <= 0) {
             stopStepDownTimer();
             this.ballotBox.clearPendingTasks();
@@ -1536,6 +1552,9 @@ public class NodeImpl implements Node, RaftServerService {
         }
     }
 
+    /**
+     * flush后回调
+     */
     private static class FollowerStableClosure extends LogManager.StableClosure {
 
         final long                          committedIndex;
@@ -1544,6 +1563,9 @@ public class NodeImpl implements Node, RaftServerService {
         final RpcRequestClosure             done;
         final long                          term;
 
+        /**
+         * 增强 done
+         */
         public FollowerStableClosure(final AppendEntriesRequest request,
                                      final AppendEntriesResponse.Builder responseBuilder, final NodeImpl node,
                                      final RpcRequestClosure done, final long term) {
@@ -1604,6 +1626,26 @@ public class NodeImpl implements Node, RaftServerService {
         }
     }
 
+    /**
+     * 收到心跳或AppendEntries时的处理
+     *
+     *  状态检测
+     *  - 校验当前节点是否激活
+     *  - 若AppendEntries任期比自己小，不处理，并返回自己的任期
+     *
+     *  - checkStepDown
+     *  - - AppendEntries任期比自己大
+     *  - - AppendEntries任期和自身一致，当前为Candidate
+     *  - - AppendEntries任期和自身一致，当前LeaderId为空
+     *
+     *  - AppendEntries 和当前LeaderId冲突，返回Term + 1 (?)
+     *
+     *   更新最后收到Leader AppendEntries的时间
+     *
+     *  日志检测
+     *  - 当前正在安装快照，返回BUSY
+     *  - 日志条目相同index的Term不相同, 返回当前节点最新的index (?)
+     */
     @Override
     public Message handleAppendEntriesRequest(final AppendEntriesRequest request, final RpcRequestClosure done) {
         boolean doUnlock = true;
@@ -1637,6 +1679,7 @@ public class NodeImpl implements Node, RaftServerService {
 
             // Check term and state to step down
             checkStepDown(request.getTerm(), serverId);
+            // 当前Leader和AppendEntries的Leader不一致
             if (!serverId.equals(this.leaderId)) {
                 LOG.error("Another peer {} declares that it is the leader at term {} which was occupied by leader {}.",
                     serverId, this.currTerm, this.leaderId);
@@ -1678,6 +1721,7 @@ public class NodeImpl implements Node, RaftServerService {
 
             if (entriesCount == 0) {
                 // heartbeat
+                // 探针 ?
                 final AppendEntriesResponse.Builder respBuilder = AppendEntriesResponse.newBuilder() //
                     .setSuccess(true) //
                     .setTerm(this.currTerm) //

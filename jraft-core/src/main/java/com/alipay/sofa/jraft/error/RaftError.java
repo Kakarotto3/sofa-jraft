@@ -218,6 +218,8 @@ public enum RaftError {
 
     /**
      * Server is in busy state
+     * - 正在安装快照
+     * - Disruptor消费过慢
      */
     EBUSY(1009),
 
